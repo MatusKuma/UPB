@@ -141,16 +141,56 @@ def encrypt_file(user):
     API request na desifrovanie
     - vstup: zasifrovany subor ktory sa ma desifrovat a privatny kluc pouzivatela
 
-    ukazka: curl -X POST 127.0.0.1:1337/api/decrypt -F "file=@encypted.bin" -F "key=@ubp.key" --output decrypted.pdf
+    ukazka: curl -X POST 127.0.0.1:1337/api/decrypt -F "file=@encrypted.bin" -F "key=@ubp.key" --output decrypted.pdf
 '''
 @app.route('/api/decrypt', methods=['POST'])
 def decrypt_file():
-
-
+    # Načítanie súborov z požiadavky
     file = request.files.get('file')
     key = request.files.get('key')
 
-    return Response(b'\xff', content_type='application/octet-stream')
+    if not file or not key:
+        return Response("File or key not provided.", status=400)
+
+    # Načítanie privátneho kľúča
+    private_key = serialization.load_pem_private_key(
+        key.read(),
+        password=None,
+        backend=default_backend()
+    )
+
+    # Načítanie zašifrovaného obsahu
+    encrypted_data = file.read()
+
+    # Extrakcia komponentov z zašifrovaného súboru
+    key_length = int.from_bytes(encrypted_data[:4], 'big')  # Dĺžka zašifrovaného kľúča
+    encrypted_sym_key = encrypted_data[4:4 + key_length]  # Zašifrovaný symetrický kľúč
+    iv = encrypted_data[4 + key_length:20 + key_length]  # Inicializačný vektor (IV)
+    encrypted_content = encrypted_data[20 + key_length:]  # Zašifrovaný obsah
+
+    # Dešifrovanie symetrického kľúča
+    sym_key = private_key.decrypt(
+        encrypted_sym_key,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
+
+    # Dešifrovanie obsahu
+    cipher = Cipher(algorithms.AES(sym_key), modes.CBC(iv), backend=default_backend())
+    decryptor = cipher.decryptor()
+
+    decrypted_content = decryptor.update(encrypted_content) + decryptor.finalize()
+
+    # Odstránenie paddingu (pokiaľ je prítomný)
+    block_size = algorithms.AES.block_size // 8
+    padding_length = decrypted_content[-1]
+    decrypted_content = decrypted_content[:-padding_length]  # Odstránenie paddingu
+
+    # Vrátenie dešifrovaného obsahu
+    return Response(decrypted_content, content_type='application/pdf')
 
 
 '''
@@ -161,33 +201,91 @@ def decrypt_file():
 '''
 @app.route('/api/sign', methods=['POST'])
 def sign_file():
-    '''
-        TODO: implementovat
-    '''
-
+        # Načítanie súborov z požiadavky
     file = request.files.get('file')
     key = request.files.get('key')
 
-    return Response(b'\xff', content_type='application/octet-stream')
+    if not file or not key:
+        return Response("File or key not provided.", status=400)
 
+    # Načítanie privátneho kľúča
+    private_key = serialization.load_pem_private_key(
+        key.read(),
+        password=None,
+        backend=default_backend()
+    )
+
+    # Načítanie obsahu dokumentu
+    document_content = file.read()
+
+    # Vytvorenie hashu obsahu dokumentu
+    document_hash = hashes.Hash(hashes.SHA256(), backend=default_backend())
+    document_hash.update(document_content)
+    digest = document_hash.finalize()
+
+    # Vytvorenie digitálneho podpisu
+    signature = private_key.sign(
+        digest,
+        padding.PSS(
+            mgf=padding.MGF1(hashes.SHA256()),
+            salt_length=padding.PSS.MAX_LENGTH
+        ),
+        hashes.SHA256()
+    )
+
+    # Vrátenie podpisu ako odpoveď
+    return Response(signature, content_type='application/octet-stream')
 
 '''
     API request na overenie podpisu pre pouzivatela <user>
     - vstup: digitalny podpis a subor
 
-    ukazka: curl -X POST 127.0.0.1:1337/api/verify/upb -F "file=@document.pdf" -F "signature=@signature.bin" --output signature.bin
+    ukazka: curl -X POST 127.0.0.1:1337/api/verify/ubp -F "file=@document.pdf" -F "signature=@signature.bin" --output signature.bin
 '''
 @app.route('/api/verify/<user>', methods=['POST'])
 def verify_signature(user):
-    '''
-        TODO: implementovat
-    '''
-
+     # Načítanie súborov z požiadavky
     file = request.files.get('file')
     signature = request.files.get('signature')
 
-    return jsonify({'verified': False})
+    if not file or not signature:
+        return jsonify({'verified': False, 'error': 'File or signature not provided.'}), 400
 
+    # Načítanie verejného kľúča používateľa
+    user_record = User.query.filter_by(username=user).first()
+    if not user_record:
+        return jsonify({'verified': False, 'error': 'User not found.'}), 404
+
+    public_key = serialization.load_pem_public_key(
+        user_record.public_key,
+        backend=default_backend()
+    )
+
+    # Načítanie obsahu dokumentu
+    document_content = file.read()
+
+    # Vytvorenie hashu obsahu dokumentu
+    document_hash = hashes.Hash(hashes.SHA256(), backend=default_backend())
+    document_hash.update(document_content)
+    digest = document_hash.finalize()
+
+    # Overenie podpisu
+    try:
+        public_key.verify(
+            signature.read(),
+            digest,
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ),
+            hashes.SHA256()
+        )
+        verified = True
+    except Exception as e:
+        print(f"Verification failed: {e}")
+        verified = False
+
+    return jsonify({'verified': verified})
 
 
 '''
