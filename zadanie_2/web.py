@@ -295,13 +295,60 @@ def verify_signature(user):
 
     ukazka: curl -X POST 127.0.0.1:1337/api/encrypt/ubp -H "Content-Type: application/octet-stream" --data-binary @file.pdf --output encrypted_file.bin
 '''
+from cryptography.hazmat.primitives import hmac
+
 @app.route('/api/encrypt2/<user>', methods=['POST'])
 def encrypt_file2(user):
-    '''
-        TODO: implementovat
-    '''
+    user_record = User.query.filter_by(username=user).first()
+    if not user_record:
+        return Response("User not found.", status=404)
 
-    return Response(b'\xff', content_type='application/octet-stream')
+    public_key = serialization.load_pem_public_key(
+        user_record.public_key,
+        backend=default_backend()
+    )
+
+    # Vytvorenie náhodného symetrického kľúča K
+    sym_key = os.urandom(32)  # 256-bitový kľúč pre AES
+    iv = os.urandom(16)  # Inicializačný vektor pre AES
+
+    # Šifrovanie obsahu súboru
+    file_content = request.data  # Načítanie obsahu z požiadavky
+    cipher = Cipher(algorithms.AES(sym_key), modes.CBC(iv), backend=default_backend())
+    encryptor = cipher.encryptor()
+
+    # Padding pre obsah
+    block_size = algorithms.AES.block_size // 8
+    padding_length = block_size - len(file_content) % block_size
+    padded_content = file_content + bytes([padding_length] * padding_length)
+    encrypted_content = encryptor.update(padded_content) + encryptor.finalize()
+
+    # Vytvorenie HMAC pre kontrolu integrity
+    hmac_obj = hmac.HMAC(sym_key, hashes.SHA256(), backend=default_backend())
+    hmac_obj.update(file_content)  # Použitie originálneho obsahu, nie šifrovaného
+    file_hmac = hmac_obj.finalize()
+
+    # Šifrovanie symetrického kľúča verejným kľúčom používateľa
+    encrypted_sym_key = public_key.encrypt(
+        sym_key,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
+
+    # Výstup: dĺžka zašifrovaného kľúča, zašifrovaný kľúč, IV, zašifrovaný obsah, HMAC
+    result = (
+        len(encrypted_sym_key).to_bytes(4, 'big') +
+        encrypted_sym_key +
+        iv +
+        encrypted_content +
+        file_hmac  # HMAC na konci
+    )
+
+    return Response(result, content_type='application/octet-stream')
+
 
 
 '''
@@ -312,14 +359,61 @@ def encrypt_file2(user):
 '''
 @app.route('/api/decrypt2', methods=['POST'])
 def decrypt_file2():
-    '''
-        TODO: implementovat
-    '''
-
     file = request.files.get('file')
     key = request.files.get('key')
 
-    return Response(b'\xff', content_type='application/octet-stream')
+    if not file or not key:
+        return Response("File or key not provided.", status=400)
+
+    # Načítanie privátneho kľúča
+    private_key = serialization.load_pem_private_key(
+        key.read(),
+        password=None,
+        backend=default_backend()
+    )
+
+    # Načítanie zašifrovaného obsahu
+    encrypted_data = file.read()
+
+    # Extrakcia komponentov z zašifrovaného súboru
+    key_length = int.from_bytes(encrypted_data[:4], 'big')
+    encrypted_sym_key = encrypted_data[4:4 + key_length]
+    iv = encrypted_data[4 + key_length:20 + key_length]
+    encrypted_content = encrypted_data[20 + key_length:-32]  # Posledných 32 bajtov je HMAC
+    file_hmac = encrypted_data[-32:]
+
+    # Dešifrovanie symetrického kľúča
+    sym_key = private_key.decrypt(
+        encrypted_sym_key,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
+
+    # Dešifrovanie obsahu
+    cipher = Cipher(algorithms.AES(sym_key), modes.CBC(iv), backend=default_backend())
+    decryptor = cipher.decryptor()
+    decrypted_content = decryptor.update(encrypted_content) + decryptor.finalize()
+
+    # Odstránenie paddingu
+    block_size = algorithms.AES.block_size // 8
+    padding_length = decrypted_content[-1]
+    decrypted_content = decrypted_content[:-padding_length]
+
+    # Overenie HMAC
+    hmac_obj = hmac.HMAC(sym_key, hashes.SHA256(), backend=default_backend())
+    hmac_obj.update(decrypted_content)  # Kontrola integrity na dešifrovaných dátach
+
+    try:
+        hmac_obj.verify(file_hmac)
+    except Exception as e:
+        return Response(f"Integrity check failed: {e}", status=400)
+
+    # Vrátenie dešifrovaného obsahu
+    return Response(decrypted_content, content_type='application/pdf')
+
 
 
 
