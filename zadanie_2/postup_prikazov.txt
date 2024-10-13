@@ -19,7 +19,7 @@ curl -X POST 127.0.0.1:1337/api/sign -F "file=@document.pdf" -F "key=@ubp.key" -
 curl -X POST 127.0.0.1:1337/api/verify/ubp -F "file=@document.pdf" -F "signature=@signature.bin" --output signature.bin
 
 7.1 API request na zasifrovanie suboru pre pouzivatela <user> (verzia s kontrolou integrity)
-curl -X POST 127.0.0.1:1337/api/encrypt/ubp -H "Content-Type: application/octet-stream" --data-binary @file.pdf --output encrypted_file.bin
+curl -X POST 127.0.0.1:1337/api/encrypt2/ubp -H "Content-Type: application/octet-stream" --data-binary @file.pdf --output encrypted_file.bin
 
 7.2 API request na desifrovanie (verzia s kontrolou integrity)
-curl -X POST 127.0.0.1:1337/api/decrypt -F "file=@encrypted_file.bin" -F "key=@ubp.key" --output decrypted_file.pdf
+curl -X POST 127.0.0.1:1337/api/decrypt2 -F "file=@encrypted_file.bin" -F "key=@ubp.key" --output decrypted_file.pdf
