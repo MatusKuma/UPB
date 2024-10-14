@@ -105,7 +105,7 @@ def encrypt_file(user):
     encryptor = cipher.encryptor()
 
     # Padding pre obsah
-    block_size = algorithms.AES.block_size // 8  # Prevod na bajty
+    block_size = algorithms.AES.block_size // 8  # Prevod na bajty = kontrolune nasobky 16tky a podla toho nastavuje padding
     padding_length = block_size - len(file_content) % block_size
 
     padded_content = file_content + bytes([padding_length] * padding_length)
@@ -383,14 +383,18 @@ def decrypt_file2():
     file_hmac = encrypted_data[-32:]
 
     # Dešifrovanie symetrického kľúča
-    sym_key = private_key.decrypt(
-        encrypted_sym_key,
-        padding.OAEP(
-            mgf=padding.MGF1(algorithm=hashes.SHA256()),
-            algorithm=hashes.SHA256(),
-            label=None
+    try:
+        sym_key = private_key.decrypt(
+            encrypted_sym_key,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
         )
-    )
+    except Exception as e:
+        print(f"Key decryption failed: {str(e)}")
+        return Response(f"Key decryption failed: {str(e)}", status=400)
 
     # Dešifrovanie obsahu
     cipher = Cipher(algorithms.AES(sym_key), modes.CBC(iv), backend=default_backend())
@@ -409,7 +413,7 @@ def decrypt_file2():
     try:
         hmac_obj.verify(file_hmac)
     except Exception as e:
-        return Response(f"Integrity check failed: {e}", status=400)
+        return Response("Integrity check failed", status=400)
 
     # Vrátenie dešifrovaného obsahu
     return Response(decrypted_content, content_type='application/pdf')
