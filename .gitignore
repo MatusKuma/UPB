@@ -1,8 +1,8 @@
 .venv
-zadanie_2/.idea
+zadanie2/.idea
 .idea
-zadanie_2/instance/data.db
-zadanie_2/ubp.key
-zadanie_2/decrypted_file.pdf
-zadanie_2/encrypted_file.bin
-zadanie_2/encrypted.bin
+zadanie2/instance/data.db
+zadanie2/ubp.key
+zadanie2/decrypted_file.pdf
+zadanie2/encrypted_file.bin
+zadanie2/encrypted.bin
