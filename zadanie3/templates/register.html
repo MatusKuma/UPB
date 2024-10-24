@@ -10,13 +10,41 @@
         <h1>Register</h1>
         <form method="POST">
             {{ form.hidden_tag() }}
-            <p>{{ form.username.label }} {{ form.username(class_="form-control") }}</p>
-            <p>{{ form.password.label }} {{ form.password(class_="form-control") }}</p>
-            <p>{{ form.confirm_password.label }} {{ form.confirm_password(class_="form-control") }}</p>
+
+            <!-- Username field with error messages -->
+            <p>
+                {{ form.username.label }}
+                {{ form.username(class_="form-control") }}
+                {% if form.username.errors %}
+                    <div class="error">{{ form.username.errors[0] }}</div>
+                {% endif %}
+            </p>
+
+            <!-- Password field with error messages -->
+            <p>
+                {{ form.password.label }}
+                {{ form.password(class_="form-control") }}
+                {% if form.password.errors %}
+                    <div class="error">{{ form.password.errors[0] }}</div>
+                {% endif %}
+            </p>
+
+            <!-- Confirm password field with error messages -->
+            <p>
+                {{ form.confirm_password.label }}
+                {{ form.confirm_password(class_="form-control") }}
+                {% if form.confirm_password.errors %}
+                    <div class="error">{{ form.confirm_password.errors[0] }}</div>
+                {% endif %}
+            </p>
+
+            <!-- Submit button -->
             <p>{{ form.submit(class_="btn btn-primary") }}</p>
         </form>
+
         <p>Already have an account? <a href="{{ url_for('login') }}">Login here</a></p>
-        
+
+        <!-- Flash messages (for general errors or success messages) -->
         {% for message in get_flashed_messages() %}
             <div class="flash">{{ message }}</div>
         {% endfor %}
