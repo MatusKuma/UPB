@@ -1,0 +1,17 @@
+Checking main.c ...
+main.c:81:29: error: Uninitialized variable: buff3 [uninitvar]
+                char OOBR = buff3[size3];
+                            ^
+main.c:15:10: style: Variable 'buff' is not assigned a value. [unassignedVariable]
+    char buff[0x1000];
+         ^
+main.c:81:27: style: Variable 'OOBR' is assigned a value that is never used. [unreadVariable]
+                char OOBR = buff3[size3];
+                          ^
+main.c:82:32: style: Variable 'OOBR_heap' is assigned a value that is never used. [unreadVariable]
+                char OOBR_heap = buff4[size3];
+                               ^
+main.c:83:30: style: Variable 'buff3[size3]' is assigned a value that is never used. [unreadVariable]
+                buff3[size3] = 'c';
+                             ^
+nofile:0:0: information: Cppcheck cannot find all the include files (use --check-config for details) [missingIncludeSystem]
